@@ -4,19 +4,18 @@ module.exports = {
   // get all thoughts
   getThoughts(req, res) {
     Thought.find()
-      .sort({ createdAt: -1 })
-      .then((dbThoughtData) => {
-        res.json(dbThoughtData);
-      })
-      .catch((err) => {
-        console.log(err);
+    .then(thoughts => res.json(thoughts))
+    .catch(err => {
+        if (err) throw err;
         res.status(500).json(err);
-      });
+    })
   },
   // get single thought by id
   getSingleThought(req, res) {
-    Thought.findOne({ _id: req.params.thoughtId })
-      .then((dbThoughtData) => {
+    Thought.findOne({ _id: req.params.id })
+      .populate({ path: 'reactions', select: '-__v' })
+        .select('-__v')
+        .then(dbThoughtData => {
         if (!dbThoughtData) {
           return res.status(404).json({ message: 'No thought with this id!' });
         }
@@ -30,10 +29,10 @@ module.exports = {
   // create a thought
   createThought(req, res) {
     Thought.create(req.body)
-      .then((dbThoughtData) => {
+      .then((_id) => {
         return User.findOneAndUpdate(
           { _id: req.body.userId },
-          { $push: { thoughts: dbThoughtData._id } },
+          { $push: { thoughts: _id } },
           { new: true }
         );
       })
@@ -51,7 +50,11 @@ module.exports = {
   },
   // update thought
 updateThought(req, res) {
-    Thought.findOneAndUpdate({ _id: req.params.thoughtId }, { $set: req.body }, { runValidators: true, new: true })
+    Thought.findOneAndUpdate({ _id: req.params.id }, { $set: req.body }, { runValidators: true, new: true })
+      .populate({
+        path: "reactions",
+        select: "-__v"
+      })
       .then((dbThoughtData) => {
         if (!dbThoughtData) {
           return res.status(404).json({ message: 'No thought with this id!' });
@@ -65,7 +68,8 @@ updateThought(req, res) {
   },
   // delete thought
   deleteThought(req, res) {
-    Thought.findOneAndRemove({ _id: req.params.thoughtId })
+    Thought.findOneAndRemove({ _id: req.params.id
+     })
       .then((dbThoughtData) => {
         if (!dbThoughtData) {
           return res.status(404).json({ message: 'No thought with this id!' });
@@ -73,8 +77,8 @@ updateThought(req, res) {
 
         // remove thought id from user's `thoughts` field
         return User.findOneAndUpdate(
-          { thoughts: req.params.thoughtId },
-          { $pull: { thoughts: req.params.thoughtId } },
+          { thoughts: req.params.id },
+          { $pull: { thoughts: req.params.id } },
           { new: true }
         );
       })
@@ -93,7 +97,7 @@ updateThought(req, res) {
   // add a reaction to a thought
   addReaction(req, res) {
     Thought.findOneAndUpdate(
-      { _id: req.params.thoughtId },
+      { _id: req.params.id },
       { $addToSet: { reactions: req.body } },
       { runValidators: true, new: true }
     )
@@ -109,9 +113,9 @@ updateThought(req, res) {
       });
   },
   // remove reaction from a thought
-  removeReaction(req, res) {
+  deleteReaction(req, res) {
     Thought.findOneAndUpdate(
-      { _id: req.params.thoughtId },
+      { _id: req.params.id },
       { $pull: { reactions: { reactionId: req.params.reactionId } } },
       { runValidators: true, new: true }
     )
